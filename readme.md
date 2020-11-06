@@ -11,34 +11,58 @@
 
 <div align="center">Folder watcher that also watches dependencies</div>
 
-## Use Cases
-- Smart dev builder (rebuild files any time source files change or dependency file changes)
-- Rebuild bundle if any files in source directory or any dependencies of those files changes
+## Overview
+- Watch .js files and their dependencies for changes (combination of [`chokidar`](https://github.com/paulmillr/chokidar) and [`esm-module-lexer`](https://github.com/guybedford/es-module-lexer))
+- Run singular callbacks and aggregate callbacks
+- Requires JS files to be written in ES6 syntax (for import/export analysis)
 
-# Usage
+## Usage
 
-## Installation
-
-NodeJS
 ```js
 // CJS
 var { watch } = require('jeye');
 // ES6
 import { watch } from 'jeye';
 
-watch('source', (changed, total) => {
-  console.log(changed, total)
+watch('source', {
+  ignore: /(^|[\/\\])[\._]./,
+  only: /\w+\.js$/
+}).change((p, { exports }) => {
+
+}).remove(p => {
+  
+}).aggregate((total) => {
+
 })
 ```
 
 ## API
 
-### `watch(source_directory, callback)`
+### `watch(source, options?)`
 
-- `source_directory` : Directory which contains scripts you want to watch for changes and dependency changes
-- `callback(path, total)`
-  - `path` : path is the path (relative to cwd) to the file that is effectively changed (changed or dependency changed)
-  - `total` : array of all paths in source_directory (in case of aggregate operation)
+- `source` : `[String]` or `String` pointing to either directories or individual files
+- `options`
+  - `ignore`: Regex to match all filenames that should be ignored
+  - `only`: Regex to match all files that should be included
+  - `chokidar`: Object to be passed to chokidar options [API](https://github.com/paulmillr/chokidar#api)
+
+### .change(callback)
+
+- `callback` : `async (path, { imports, exports }) => { }`
+  - `path` : path relative to cwd of the changed file
+  - `imports` : list of imports exported by the changed file (from [`esm-module-lexer`](https://github.com/guybedford/es-module-lexer))
+  - `exports` : list of exports exported by the changed file (from [`esm-module-lexer`](https://github.com/guybedford/es-module-lexer))
+
+### .remove(callback)
+
+- `callback` : `async (path) => { }`
+  - `path` : path relative to cwd of the deleted file
+
+### .aggregate(callback)
+
+- `callback` : `(total) => { }`
+  - `total`: Object with the paths as keys and `{ imports, exports }` as value
+
 
 ## License
 
