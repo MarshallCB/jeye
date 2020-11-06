@@ -4,8 +4,17 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
 import path from 'path'
 import {totalist} from 'totalist/sync'
 
+function isHidden(p, ignore, only){
+  // Ignore only if ignore is set and ignore test passes
+  let shouldIgnore = ignore && ignore.test(p)
+  // if only isn't set, include everything. Otherwise, must pass only test
+  let shouldInclude = !only || only.test(p)
+  // file is hidden if it shouldn't be included OR it should be ignored
+  return !shouldInclude || shouldIgnore
+}
+
 class Jeye{
-  constructor(source, options){
+  constructor(source, options={}){
     Object.assign(this, {
       source: path.normalize(source),
       options,
@@ -35,27 +44,18 @@ class Jeye{
       delete this.dependents[p]
       this.dispatch('remove', p)
     })
-    let initialPromises = []
-    totalist(this.source, (rel) => {
-      let p = path.join(this.source, rel)
-      if(!this.isHidden(p)){
-        initialPromises.push(new Promise((res, rej) => {
-          this.updateDependents(p).then(() => {
-            res()
-          })
-        }))
-      }
-    })
+    let initialPromises = targets(this.source, this.options).map(({ rel }) => 
+      new Promise((res, rej) => {
+        this.updateDependents(rel).then(res)
+      })
+    )
     Promise.all(initialPromises).then(() => {
-      console.log(this.targets)
       this.dispatch('ready', this.targets)
     })
   }
 
   isHidden(p){
-    let shouldIgnore = this.options.ignore && this.options.ignore.test(p)
-    let shouldInclude = !this.options.only || this.options.only.test(p)
-    return !(shouldInclude && !shouldIgnore)
+    return isHidden(p, this.options.ignore, this.options.only)
   }
 
   async effects(p){
@@ -139,4 +139,19 @@ class Jeye{
 
 export function watch(source, options){
   return new Jeye(source, options);
+}
+
+export function targets(source, options={}){
+  let targets = []
+  totalist(source, (rel) => {
+    if(!isHidden(rel, options.ignore, options.only)){
+      targets.push({
+        // to be used when building to another folder
+        id: rel,
+        // path to source file relative to cwd
+        rel: path.join(source, rel)
+      })
+    }
+  })
+  return targets
 }

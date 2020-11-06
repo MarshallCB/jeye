@@ -3,3 +3,5 @@ declare class Watcher{
 }
 
 export declare function watch(source: string, options?: {ignore: RegExp, only: RegExp, chokidar: any}): Watcher;
+
+export declare function targets(source: string, ignore?: RegExp, only?: RegExp): [{ rel: string, id: string }];
