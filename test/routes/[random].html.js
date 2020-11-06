@@ -1,3 +1,3 @@
 import title from '../components/title'
 
-export default title 
+export default title

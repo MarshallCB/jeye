@@ -19,28 +19,68 @@ function totalist(dir, callback, pre='') {
 
 var chokidar = require('chokidar');
 
-let isHiddenFile = (p) => path.basename(p).startsWith('.') || path.basename(p).startsWith('_');
-
-function watch(toWatch, callback=()=>{}){
-  toWatch = path.normalize(toWatch);
-  let initialFiles = [];
-  let watcher;
-  let dependents = {};
-
-  async function effects(p){
-    let counter = 0;
-    if(p.includes(toWatch) && !isHiddenFile(p)){
-      if(!initialFiles.includes(p)){
-        initialFiles.push(p);
+class Jeye{
+  constructor(source, options){
+    Object.assign(this, {
+      source: path.normalize(source),
+      options,
+      targets: {},
+      dependents: {},
+      subscribers: {}
+    });
+    this.watcher = chokidar.watch([], {
+      ...options.chokidar,
+      ignoreInitial: true
+    }).on('add', async (p) => {
+      await this.updateDependents(p);
+      let changed = await this.effects(p);
+      this.dispatch('aggregate', this.targets, changed);
+    }).on('change', async (p) => {
+      await this.updateDependents(p);
+      let changed = await this.effects(p);
+      this.dispatch('aggregate', this.targets, changed);
+    }).on('unlink', async (p) => {
+      this.dispatch('remove', p);
+    });
+    let initialPromises = [];
+    totalist(this.source, (rel) => {
+      let p = path.join(this.source, rel);
+      if(!this.isHidden(p)){
+        initialPromises.push(new Promise((res, rej) => {
+          this.updateDependents(p).then(() => {
+            res();
+          });
+        }));
       }
-      await callback(p, initialFiles);
+    });
+    Promise.all(initialPromises).then(() => {
+      console.log(this.targets);
+      this.dispatch('ready', this.targets);
+    });
+  }
+
+  isHidden(p){
+    let shouldIgnore = this.options.ignore && this.options.ignore.test(p);
+    let shouldInclude = !this.options.only || this.options.only.test(p);
+    return !(shouldInclude && !shouldIgnore)
+  }
+
+  async effects(p){
+    let counter = 0;
+    // if in source directory and isn't hidden
+    if(p.includes(this.source) && !this.isHidden(p)){
+      // fire 'change' event and wait for completion
+      await this.dispatch('change', p, this.targets[p]);
+      // increment counter (1 target changed so far)
       counter++;
     }
-    if(dependents[p]){
+    if(this.dependents[p]){
       let promises = [];
-      dependents[p].forEach(d => {
+      this.dependents[p].forEach(dep => {
         promises.push(new Promise((res, rej) => {
-          effects(d).then(x => {
+          // trigger effects() recursively of each dependent file
+          this.effects(dep).then(x => {
+            // count affected targets (returned by effects())
             counter += x;
             res();
           });
@@ -53,57 +93,59 @@ function watch(toWatch, callback=()=>{}){
     return counter;
   }
 
-  async function updateDependents(p){
+  async updateDependents(p){
+    if(path.extname(p) !== '.js') return;
     await init;
-    let source = fs.readFileSync(p, 'utf8');
-    let [imps, exps] = parse(source);
+    let code = fs.readFileSync(p, 'utf8');
+    let [imps, exps] = parse(code);
+    if(p.includes(this.source) && !this.isHidden(p)){
+      // ensure this file is included in "all target files"
+      this.targets[p] = { imports: imps, exports: exps, code };
+      this.watcher.add(p);
+    }
     imps = imps.forEach(({ s, e }) => {
-      let rawimport = source.substring(s,e);
+      let import_str = code.substring(s,e);
       // only look for local imports (like './file.js' or '../file.js', not 'external-module')
-      if(rawimport.startsWith('.')){
+      if(import_str.startsWith('.')){
         // ensure .js extension if not included in source
-        rawimport = path.extname(rawimport) ? rawimport : rawimport + '.js';
+        import_str = import_str.endsWith('.js') ? import_str : import_str + '.js';
         // convert the import path to be relative to the cwd
-        let cwdimport = path.join(p, '../', rawimport);
+        let cwdimport = path.join(p, '../', import_str);
         
-        if(!dependents[cwdimport]){
-          dependents[cwdimport] = new Set([p]);
-          updateDependents(cwdimport);
-          watcher.add(cwdimport);
+        if(!this.dependents[cwdimport]){
+          this.dependents[cwdimport] = new Set([p]);
+          // recursively search for dependencies to trigger file changes
+          this.updateDependents(cwdimport);
+          // watch dependency for file changes
+          this.watcher.add(cwdimport);
         }
         else {
-          dependents[cwdimport].add(p);
+          // ensure this path is included in dependency's dependents
+          this.dependents[cwdimport].add(p);
         }
       }
     });
   }
 
-  watcher = chokidar.watch(toWatch, {
-    ignoreInitial: true
-  })
-    .on('add', async (p) => {
-      await updateDependents(p);
-      let changed = await effects(p);
-      // console.log(changed)
-    })
-    .on('change', async (p) => {
-      await updateDependents(p);
-      let changed = await effects(p);
-      // console.log(changed)
+  dispatch(event, ...args){
+    this.subscribers[event].forEach(callback => {
+      callback.apply(null, args);
     });
-  
-  totalist(toWatch, (rel) => {
-    if(!isHiddenFile(rel)){
-      initialFiles.push(path.join(toWatch, rel));
+  }
+
+  on(event, callback){
+    if(this.subscribers[event]){
+      this.subscribers[event].add(callback);
+    } else {
+      this.subscribers[event] = new Set([callback]);
     }
-  });
-  Promise.all(initialFiles.map(async p => {
-    await updateDependents(p);
-    let changed = await effects(p);
-    // console.log(changed)
-  })).then(() => {
-    // console.log("READY")
-  });
+    return this;
+  }
+  
+}
+
+function watch(source, options){
+  return new Jeye(source, options);
 }
 
 export { watch };

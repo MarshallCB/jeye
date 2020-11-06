@@ -1,1 +1,3 @@
-export default 'INDEX'
+import title from '../components/title'
+
+export default title

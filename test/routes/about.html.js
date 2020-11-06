@@ -1,3 +1,3 @@
-import title from '../components/title'
+import index from './index.html'
 
-export default title
+export default index

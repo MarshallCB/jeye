@@ -1,5 +1,21 @@
 var { watch } = require('../dist/index')
 
-watch('test/routes', (changed, total) => {
-  console.log(changed)
+watch('test/routes', {
+  ignore: /(^|[\/\\])[\._]./
+}).on('change', (path, { exports, imports, code }) => {
+  console.log("CHANGE")
+  console.log(path, exports)
+}).on('aggregate', (total, changed) => {
+  console.log("AGGREGATE")
+  console.log(changed + " changed")
+}).on('ready', (total) => {
+  console.log("READY")
+  console.log(total)
 })
+
+/**
+ * 
+ * ___  
+ * •J•  jeye
+ * 
+ */
