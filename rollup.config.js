@@ -12,11 +12,11 @@ export default [{
 		file: pkg.main,
 		sourcemap: false,
 	}],
-	external: {
+	external: [
 		...require('module').builtinModules,
 		...Object.keys(pkg.dependencies || {}),
 		...Object.keys(pkg.peerDependencies || {}),
-	},
+	],
 	plugins: [
 		resolve()
 	]

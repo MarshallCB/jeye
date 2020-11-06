@@ -40,6 +40,14 @@ class Jeye{
       let changed = await this.effects(p);
       this.dispatch('aggregate', this.targets, changed);
     }).on('unlink', async (p) => {
+      // remove chain
+      Object.keys(this.dependents).forEach(k => {
+        this.dependents[k].delete(p);
+        if(this.dependents[k].size === 0){
+          delete this.dependents[k];
+        }
+      });
+      delete this.dependents[p];
       this.dispatch('remove', p);
     });
     let initialPromises = [];
@@ -107,7 +115,7 @@ class Jeye{
       let import_str = code.substring(s,e);
       // only look for local imports (like './file.js' or '../file.js', not 'external-module')
       if(import_str.startsWith('.')){
-        // ensure .js extension if not included in source
+        // ensure .js extension if not included in import statement
         import_str = import_str.endsWith('.js') ? import_str : import_str + '.js';
         // convert the import path to be relative to the cwd
         let cwdimport = path.join(p, '../', import_str);
