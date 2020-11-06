@@ -1,3 +1,5 @@
-export declare function mix(hue1: number, hue2: number, ratio?: number): number;
-export declare function correction(hue: number, saturation?: number, lightness?: number): number[];
-export declare function hueman(hue: number, saturation?: number, lightness?: number, alpha?: number): string;
+declare class Watcher{
+  on(event: string, callback: (path: string, ...args: any) => void): Watcher
+}
+
+export declare function watch(source: string, options?: {ignore: RegExp, only: RegExp, chokidar: any}): Watcher;
