@@ -2,7 +2,7 @@ var chokidar = require('chokidar')
 import fs from 'fs'
 import { init, parse } from 'es-module-lexer/dist/lexer.js';
 import path from 'path'
-import {totalist} from 'totalist/sync'
+import {totalist} from 'totalist'
 
 function isHidden(p, ignore, only){
   // Ignore only if ignore is set and ignore test passes
@@ -11,6 +11,15 @@ function isHidden(p, ignore, only){
   let shouldInclude = !only || only.test(p)
   // file is hidden if it shouldn't be included OR it should be ignored
   return !shouldInclude || shouldIgnore
+}
+
+async function file_info(p, source){
+  await init;
+  let js = (path.extname(p) === '.js')
+  let id = p.replace(source, '')
+  let code = fs.readFileSync(p, 'utf8')
+  let [imports, exports] = parse(code)
+  return { imports, exports, code, js, id }
 }
 
 class Jeye{
@@ -44,28 +53,31 @@ class Jeye{
       delete this.dependents[p]
       this.dispatch('remove', p)
     })
-    let initialPromises = targets(this.source, this.options).map(({ rel }) => 
-      new Promise((res, rej) => {
-        this.updateDependents(rel).then(res)
+    targets(this.source, this.options).then((targs) => {
+      Promise.all(
+        Object.keys(targs).map(k => 
+          new Promise((res, rej) => {
+            this.updateDependents(k).then(res)
+          })
+        )
+      ).then(() => {
+        this.dispatch('ready', this.targets)
       })
-    )
-    Promise.all(initialPromises).then(() => {
-      this.dispatch('ready', this.targets)
     })
   }
 
-  isHidden(p){
-    return isHidden(p, this.options.ignore, this.options.only)
+  isTarget(p){
+    return p.includes(this.source) && !isHidden(p, this.options.ignore, this.options.only)
   }
 
   async effects(p){
-    let counter = 0;
+    let changes = [];
     // if in source directory and isn't hidden
-    if(p.includes(this.source) && !this.isHidden(p)){
+    if(this.isTarget(p)){
       // fire 'change' event and wait for completion
       await this.dispatch('change', p, this.targets[p])
-      // increment counter (1 target changed so far)
-      counter++;
+      // increment changes (1 target changed so far)
+      changes.push(p);
     }
     if(this.dependents[p]){
       let promises = []
@@ -74,30 +86,27 @@ class Jeye{
           // trigger effects() recursively of each dependent file
           this.effects(dep).then(x => {
             // count affected targets (returned by effects())
-            counter += x;
+            changes.push(dep);
             res()
           })
         }))
       })
       return Promise.all(promises).then(() => {
-        return counter;
+        return changes;
       })
     }
-    return counter;
+    return changes;
   }
 
   async updateDependents(p){
-    if(path.extname(p) !== '.js') return;
-    await init;
-    let code = fs.readFileSync(p, 'utf8')
-    let [imps, exps] = parse(code)
-    if(p.includes(this.source) && !this.isHidden(p)){
-      // ensure this file is included in "all target files"
-      this.targets[p] = { imports: imps, exports: exps, code }
+    let info = await file_info(p, this.source)
+    if(!info.js) return
+    if(this.isTarget(p)){
+      this.targets[p] = info
       this.watcher.add(p)
     }
-    imps = imps.forEach(({ s, e }) => {
-      let import_str = code.substring(s,e)
+    info.imports.forEach(({ s, e }) => {
+      let import_str = info.code.substring(s,e)
       // only look for local imports (like './file.js' or '../file.js', not 'external-module')
       if(import_str.startsWith('.')){
         // ensure .js extension if not included in import statement
@@ -141,17 +150,19 @@ export function watch(source, options){
   return new Jeye(source, options);
 }
 
-export function targets(source, options={}){
-  let targets = []
-  totalist(source, (rel) => {
-    if(!isHidden(rel, options.ignore, options.only)){
-      targets.push({
-        // to be used when building to another folder
-        id: rel,
-        // path to source file relative to cwd
-        rel: path.join(source, rel)
-      })
-    }
+export async function targets(source, options={}){
+  let targets = {}
+  let paths = []
+  await totalist(source, (rel) => {
+    paths.push(path.join(source, rel))
   })
+  await Promise.all(
+    paths.map(p => new Promise((res, rej) => {
+      file_info(p, source).then(info => {
+        targets[p] = info
+        res()
+      })
+    }))
+  )
   return targets
 }

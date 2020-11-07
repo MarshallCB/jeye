@@ -16,6 +16,9 @@ watch('test/routes', {
 /**
  * 
  * ___  
- * •J•  jeye
+ * '┘'  jeye
  * 
+ * https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+ * 
+ * ◤⋰◢  ◤⟋◢ 
  */
