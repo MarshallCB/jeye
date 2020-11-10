@@ -66,11 +66,6 @@ class Jeye{
       this.dispatch('remove', p)
     })
 
-    // let cb = function(){this.dispatch('ready', this.targets)}.bind(this)
-    // targets(this.sources, this.options).then((targs) => {
-    //   this.targets = targs
-    //   Promise.all(Object.keys(targs).map(this.updateDependents)).then(cb)
-    // })
     this.init().then(() => {
       this.dispatch('ready', this.targets)
     }).catch(e => {
@@ -178,14 +173,20 @@ export function watch(source, options){
 export async function targets(sources=[], options={}){
   let targets = {}
   let paths = []
-  for(let i = 0; i < sources.length; i++){
-    await totalist(sources[i], (rel) => {
-      paths.push(path.join(sources[i], rel))
+
+  // await for paths to be filled with all files in sources
+  let promises = []
+  sources.map(async src => {
+    await totalist(src,  (rel) => {
+      path.push(path.join(sources[i], rel))
     })
-  }
-  async function fillTarget(p){
+  })
+  await Promise.all(promises) 
+
+  // for each path, await the file_info and fill targets
+  await Promise.all(paths.map(async p => {
     targets[p] = await file_info(p)
-  }
-  await Promise.all(paths.map(fillTarget))
+  }))
+  
   return targets
 }
