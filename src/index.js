@@ -1,5 +1,5 @@
 var chokidar = require('chokidar')
-import fs from 'fs'
+import { promises as fs } from 'fs'
 import { init, parse } from 'es-module-lexer/dist/lexer.js';
 import path from 'path'
 import {totalist} from 'totalist'
@@ -13,25 +13,24 @@ function isHidden(p, ignore, only){
   return !shouldInclude || shouldIgnore
 }
 
-async function file_info(p, source){
+async function file_info(p){
   await init;
   let js = (path.extname(p) === '.js')
-  let id = p.replace(source, '')
-  let code = fs.readFileSync(p, 'utf8')
-  let [imports, exports] = parse(code)
-  return { imports, exports, code, js, id }
+  let contents = await fs.readFile(p)
+  let [imports, exports] = js ? parse(contents.toString('utf8')) : [null,null]
+  return { imports, exports, contents, js }
 }
 
 class Jeye{
   constructor(source, options={}){
     Object.assign(this, {
-      source: path.normalize(source),
+      sources: (Array.isArray(source) ? source : [source]).map(path.normalize),
       options,
       targets: {},
       dependents: {},
       subscribers: {}
     })
-    this.watcher = chokidar.watch([], {
+    this.watcher = chokidar.watch(this.sources, {
       ...options.chokidar,
       ignoreInitial: true
     }).on('add', async (p) => {
@@ -43,7 +42,6 @@ class Jeye{
       let changed = await this.effects(p)
       this.dispatch('aggregate', this.targets, changed)
     }).on('unlink', async (p) => {
-      // remove chain
       Object.keys(this.dependents).forEach(k => {
         this.dependents[k].delete(p)
         if(this.dependents[k].size === 0){
@@ -52,23 +50,46 @@ class Jeye{
       })
       delete this.dependents[p]
       this.dispatch('remove', p)
-    })
-    targets(this.source, this.options).then((targs) => {
-      Promise.all(
-        Object.keys(targs).map(k => 
-          new Promise((res, rej) => {
-            this.updateDependents(k).then(res)
-          })
-        )
-      ).then(() => {
-        this.dispatch('ready', this.targets)
+    }).on('unlinkDir', async (p) => {
+      let changed = [];
+      Object.keys(this.dependents).forEach(k => {
+        this.dependents[k].forEach(dep => {
+          if(dep.startsWith(p)){
+            this.dependents[k].delete(dep)
+            changed.push(dep)
+          }
+        })
+        if(this.dependents[k].size === 0){
+          delete this.dependents[k]
+        }
       })
+      this.dispatch('remove', p)
     })
+
+    // let cb = function(){this.dispatch('ready', this.targets)}.bind(this)
+    // targets(this.sources, this.options).then((targs) => {
+    //   this.targets = targs
+    //   Promise.all(Object.keys(targs).map(this.updateDependents)).then(cb)
+    // })
+    this.init().then(() => {
+      this.dispatch('ready', this.targets)
+    }).catch(e => {
+      this.dispatch('error', "Error initializing jeye")
+    })
+    this.updateDependents = this.updateDependents.bind(this)
+    this.effects = this.effects.bind(this)
   }
 
   isTarget(p){
-    return p.includes(this.source) && !isHidden(p, this.options.ignore, this.options.only)
+    return this.sources.some(s => p.includes(s)) && !isHidden(p, this.options.ignore, this.options.only)
   }
+
+  async init(){
+    await init;
+    this.targets = await targets(this.sources, this.options)
+    await Promise.all(Object.keys(this.targets).map(this.updateDependents))
+  }
+
 
   async effects(p){
     let changes = [];
@@ -80,59 +101,63 @@ class Jeye{
       changes.push(p);
     }
     if(this.dependents[p]){
+      let effect = async function(dep){
+        let nested_changes = await this.effects(dep)
+        changes = changes.concat(nested_changes)
+      }.bind(this)
       let promises = []
       this.dependents[p].forEach(dep => {
-        promises.push(new Promise((res, rej) => {
-          // trigger effects() recursively of each dependent file
-          this.effects(dep).then(x => {
-            // count affected targets (returned by effects())
-            changes.push(dep);
-            res()
-          })
-        }))
+        promises.push(effect(dep))
       })
-      return Promise.all(promises).then(() => {
-        return changes;
-      })
+      await Promise.all(promises)
     }
     return changes;
   }
 
   async updateDependents(p){
-    let info = await file_info(p, this.source)
-    if(!info.js) return
+    let info = await file_info(p)
     if(this.isTarget(p)){
       this.targets[p] = info
       this.watcher.add(p)
     }
-    info.imports.forEach(({ s, e }) => {
-      let import_str = info.code.substring(s,e)
-      // only look for local imports (like './file.js' or '../file.js', not 'external-module')
-      if(import_str.startsWith('.')){
-        // ensure .js extension if not included in import statement
-        import_str = import_str.endsWith('.js') ? import_str : import_str + '.js'
-        // convert the import path to be relative to the cwd
-        let cwdimport = path.join(p, '../', import_str)
-        
-        if(!this.dependents[cwdimport]){
-          this.dependents[cwdimport] = new Set([p])
-          // recursively search for dependencies to trigger file changes
-          this.updateDependents(cwdimport)
-          // watch dependency for file changes
-          this.watcher.add(cwdimport)
+    let updateDependents = this.updateDependents
+    if(info.js){
+      let promises = info.imports.map(async function({ s, e }){
+        let import_str = info.contents.toString('utf8').substring(s,e)
+        // only look for local imports (like './file.js' or '../file.js', not 'external-module')
+        if(import_str.startsWith('.')){
+          // ensure .js extension if not included in import statement
+          import_str = import_str.endsWith('.js') ? import_str : import_str + '.js'
+          // convert the import path to be relative to the cwd
+          let import_path = path.join(p, '../', import_str)
+          
+          // if we haven't already tracked this file
+          if(!this.dependents[import_path]){
+            this.dependents[import_path] = new Set([p])
+            // recursively search for dependencies to trigger file changes
+            await this.updateDependents(import_path)
+            // watch dependency for file changes
+            this.watcher.add(import_path)
+          }
+          else {
+            // ensure this path is included in dependency's dependents
+            this.dependents[import_path].add(p)
+          }
         }
-        else {
-          // ensure this path is included in dependency's dependents
-          this.dependents[cwdimport].add(p)
-        }
-      }
-    })
+      }.bind(this))
+    }
   }
 
-  dispatch(event, ...args){
-    this.subscribers[event].forEach(callback => {
-      callback.apply(null, args)
-    })
+  async dispatch(event, ...args){
+    if(this.subscribers[event]){
+      let promises = []
+      this.subscribers[event].forEach(callback => {
+        // if callback is async, it will return a promise
+        promises.push(callback.apply(null,args))
+      })
+      await Promise.all(promises)
+    }
+    
   }
 
   on(event, callback){
@@ -150,19 +175,17 @@ export function watch(source, options){
   return new Jeye(source, options);
 }
 
-export async function targets(source, options={}){
+export async function targets(sources=[], options={}){
   let targets = {}
   let paths = []
-  await totalist(source, (rel) => {
-    paths.push(path.join(source, rel))
-  })
-  await Promise.all(
-    paths.map(p => new Promise((res, rej) => {
-      file_info(p, source).then(info => {
-        targets[p] = info
-        res()
-      })
-    }))
-  )
+  for(let i = 0; i < sources.length; i++){
+    await totalist(sources[i], (rel) => {
+      paths.push(path.join(sources[i], rel))
+    })
+  }
+  async function fillTarget(p){
+    targets[p] = await file_info(p)
+  }
+  await Promise.all(paths.map(fillTarget))
   return targets
 }

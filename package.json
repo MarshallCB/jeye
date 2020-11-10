@@ -5,7 +5,7 @@
     "type": "git",
     "url": "git+https://github.com/marshallcb/jeye.git"
   },
-  "description": "Watch all scripts and their dependencies for changes",
+  "description": "Watch files and their dependencies for changes",
   "module": "dist/index.mjs",
   "main": "dist/index.js",
   "license": "MIT",

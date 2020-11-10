@@ -9,7 +9,7 @@
   </a>
 </div>
 
-<div align="center">File watcher that also watches dependencies</div>
+<div align="center">Watch files and their dependencies for changes</div>
 
 ## Overview
 - Watch .js files and their dependencies for changes (combination of [`chokidar`](https://github.com/paulmillr/chokidar) and [`esm-module-lexer`](https://github.com/guybedford/es-module-lexer))
@@ -32,7 +32,7 @@ watch('source', {
 }).on('remove', p => {
   console.log(p + ' removed')
 }).on('aggregate', (targets, changed) => {
-  console.log(changed + ' files changed')
+  console.log(changed.length + ' files changed')
 }).on('ready', (targets) => {
   console.log("READY")
 })
