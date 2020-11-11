@@ -36,11 +36,11 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "8.1.0",
     "esm": "^3.2.25",
-    "rollup": "2.21.0"
-  },
-  "dependencies": {
-    "chokidar": "^3.4.3",
+    "rollup": "2.21.0",
     "es-module-lexer": "^0.3.26",
     "totalist": "^2.0.0"
+  },
+  "dependencies": {
+    "chokidar": "^3.4.3"
   }
 }

@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/marshallcb/jeye/raw/main/jeye.png" alt="jeye" width="75" />
+  <img src="https://github.com/marshallcb/jeye/raw/main/docs/jeye.png" alt="jeye" width="75" />
 </div>
 
 <h1 align="center">jeye</h1>
