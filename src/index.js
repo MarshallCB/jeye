@@ -2,7 +2,7 @@ var chokidar = require('chokidar')
 import { promises as fs } from 'fs'
 import { init, parse } from 'es-module-lexer/dist/lexer.js';
 import path from 'path'
-import {totalist} from 'totalist'
+import {totalist} from 'totalist/sync'
 
 function isHidden(p, ignore, only){
   // Ignore only if ignore is set and ignore test passes
@@ -174,14 +174,11 @@ export async function targets(sources=[], options={}){
   let targets = {}
   let paths = []
 
-  // await for paths to be filled with all files in sources
-  let promises = []
-  sources.map(async src => {
-    await totalist(src,  (rel) => {
+  sources.map(src => {
+    totalist(src,  (rel) => {
       paths.push(path.join(src, rel))
     })
   })
-  await Promise.all(promises) 
 
   // for each path, await the file_info and fill targets
   await Promise.all(paths.map(async p => {
