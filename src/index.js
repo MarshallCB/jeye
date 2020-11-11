@@ -174,8 +174,6 @@ export async function targets(sources=[], options={}){
   let targets = {}
   let paths = []
 
-  console.log("GETTING TARGETS")
-
   // await for paths to be filled with all files in sources
   let promises = []
   sources.map(async src => {
