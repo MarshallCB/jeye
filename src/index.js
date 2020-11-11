@@ -178,7 +178,7 @@ export async function targets(sources=[], options={}){
   let promises = []
   sources.map(async src => {
     await totalist(src,  (rel) => {
-      path.push(path.join(sources[i], rel))
+      path.push(path.join(src, rel))
     })
   })
   await Promise.all(promises) 
