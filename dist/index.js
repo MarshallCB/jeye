@@ -201,18 +201,22 @@ async function targets(sources=[], options={}){
   let targets = {};
   let paths = [];
 
+  console.log("GETTING TARGETS");
+
   // await for paths to be filled with all files in sources
   let promises = [];
   sources.map(async src => {
     await totalist(src,  (rel) => {
-      path__default.push(path__default.join(sources[i], rel));
+      paths.push(path__default.join(src, rel));
     });
   });
   await Promise.all(promises); 
 
   // for each path, await the file_info and fill targets
   await Promise.all(paths.map(async p => {
-    targets[p] = await file_info(p);
+    if(!isHidden(p, options.ignore, options.only)){
+      targets[p] = await file_info(p);
+    }
   }));
   
   return targets
