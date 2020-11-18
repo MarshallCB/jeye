@@ -13,12 +13,18 @@ function isHidden(p, ignore, only){
   return !shouldInclude || shouldIgnore
 }
 
-async function file_info(p){
+async function file_info(p, sources){
   await init;
   let js = (path.extname(p) === '.js')
   let contents = await fs.readFile(p)
+  let id
+  sources.find(s => {
+    id = p.startsWith(s) ? p.replace(s,"") : p
+    // it found the correct source when id != p
+    return id !== p;
+  });
   let [imports, exports] = js ? parse(contents.toString('utf8')) : [null,null]
-  return { imports, exports, contents, js }
+  return { imports, exports, contents, js, id }
 }
 
 class Jeye{
@@ -110,7 +116,7 @@ class Jeye{
   }
 
   async updateDependents(p){
-    let info = await file_info(p)
+    let info = await file_info(p, this.sources)
     if(this.isTarget(p)){
       this.targets[p] = info
       this.watcher.add(p)
@@ -183,7 +189,7 @@ export async function targets(sources=[], options={}){
   // for each path, await the file_info and fill targets
   await Promise.all(paths.map(async p => {
     if(!isHidden(p, options.ignore, options.only)){
-      targets[p] = await file_info(p)
+      targets[p] = await file_info(p, sources)
     }
   }))
   
