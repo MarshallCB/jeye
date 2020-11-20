@@ -32,7 +32,7 @@ async function file_info(p, sources){
   await init;
   let js = (path.extname(p) === '.js');
   let contents = await promises.readFile(p);
-  let id;
+  let id=p;
   sources.find(s => {
     id = p.startsWith(s) ? p.replace(s,"") : p;
     // it found the correct source when id != p
@@ -105,19 +105,18 @@ class Jeye{
   }
 
 
-  async effects(p){
-    let changes = [];
+  async effects(p,changes=[]){
     // if in source directory and isn't hidden
+    changes.push(p);
     if(this.isTarget(p)){
       // fire 'change' event and wait for completion
-      await this.dispatch('change', p, this.targets[p]);
+      await this.dispatch('change', p, this.targets[p], changes);
       // increment changes (1 target changed so far)
-      changes.push(p);
     }
     if(this.dependents[p]){
       let effect = async function(dep){
-        let nested_changes = await this.effects(dep);
-        changes = changes.concat(nested_changes);
+        let nested_changes = await this.effects(dep,changes);
+        changes = changes.concat(nested_changes.filter(v => changes.indexOf(v) < 0));
       }.bind(this);
       let promises = [];
       this.dependents[p].forEach(dep => {
