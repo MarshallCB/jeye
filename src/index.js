@@ -1,8 +1,11 @@
 var chokidar = require('chokidar')
-import { promises as fs } from 'fs'
+import fs from 'fs'
+import { promisify } from 'util'
 import { init, parse } from 'es-module-lexer/dist/lexer.js';
 import path from 'path'
 import {totalist} from 'totalist/sync'
+
+const readFile = promisify(fs.readFile)
 
 function isHidden(p, ignore, only){
   // Ignore only if ignore is set and ignore test passes
@@ -16,7 +19,7 @@ function isHidden(p, ignore, only){
 async function file_info(p, sources){
   await init;
   let js = (path.extname(p) === '.js')
-  let contents = await fs.readFile(p)
+  let contents = await readFile(p)
   let id=p
   sources.find(s => {
     id = p.startsWith(s) ? p.replace(s,"") : p

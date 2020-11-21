@@ -5,6 +5,8 @@ Object.defineProperty(exports, '__esModule', { value: true });
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
 var fs = require('fs');
+var fs__default = _interopDefault(fs);
+var util = require('util');
 var path = require('path');
 var path__default = _interopDefault(path);
 
@@ -26,6 +28,8 @@ function totalist(dir, callback, pre='') {
 
 var chokidar = require('chokidar');
 
+const readFile = util.promisify(fs__default.readFile);
+
 function isHidden(p, ignore, only){
   // Ignore only if ignore is set and ignore test passes
   let shouldIgnore = ignore && ignore.test(p);
@@ -38,7 +42,7 @@ function isHidden(p, ignore, only){
 async function file_info(p, sources){
   await init;
   let js = (path__default.extname(p) === '.js');
-  let contents = await fs.promises.readFile(p);
+  let contents = await readFile(p);
   let id=p;
   sources.find(s => {
     id = p.startsWith(s) ? p.replace(s,"") : p;

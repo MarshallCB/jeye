@@ -1,4 +1,5 @@
-import { readdirSync, statSync, promises } from 'fs';
+import fs, { readdirSync, statSync } from 'fs';
+import { promisify } from 'util';
 import path, { resolve, join } from 'path';
 
 /* es-module-lexer 0.3.26 */
@@ -19,6 +20,8 @@ function totalist(dir, callback, pre='') {
 
 var chokidar = require('chokidar');
 
+const readFile = promisify(fs.readFile);
+
 function isHidden(p, ignore, only){
   // Ignore only if ignore is set and ignore test passes
   let shouldIgnore = ignore && ignore.test(p);
@@ -31,7 +34,7 @@ function isHidden(p, ignore, only){
 async function file_info(p, sources){
   await init;
   let js = (path.extname(p) === '.js');
-  let contents = await promises.readFile(p);
+  let contents = await readFile(p);
   let id=p;
   sources.find(s => {
     id = p.startsWith(s) ? p.replace(s,"") : p;
