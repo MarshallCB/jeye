@@ -46,9 +46,9 @@ async function file_info(p, sources){
 }
 
 class Jeye{
-  constructor(source, options={}){
+  constructor(sources, options={}){
     Object.assign(this, {
-      sources: (Array.isArray(source) ? source : [source]).map(path.normalize),
+      sources: (Array.isArray(sources) ? sources : [sources]).map(path.normalize),
       options,
       targets: {},
       dependents: {},
@@ -206,7 +206,7 @@ function watch(source, options){
 async function targets(sources=[], options={}){
   let targets = {};
   let paths = [];
-  sources = (Array.isArray(source) ? source : [source]).map(path.normalize);
+  sources = (Array.isArray(sources) ? sources : [sources]).map(path.normalize);
 
   sources.map(src => {
     totalist(src,  (rel) => {
