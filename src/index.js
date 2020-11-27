@@ -45,10 +45,24 @@ class Jeye{
     }).on('add', async (p) => {
       await this.updateDependents(p)
       let changed = await this.effects(p)
+      let promises = changed.map(async change => {
+        if(this.isTarget(change)){
+          // fire 'change' event and wait for completion
+          await this.dispatch('change', change, this.targets[change], changed)
+        }
+      })
+      await Promise.all(promises)
       this.dispatch('aggregate', this.targets, changed)
     }).on('change', async (p) => {
       await this.updateDependents(p)
       let changed = await this.effects(p)
+      let promises = changed.map(async change => {
+        if(this.isTarget(change)){
+          // fire 'change' event and wait for completion
+          await this.dispatch('change', change, this.targets[change], changed)
+        }
+      })
+      await Promise.all(promises)
       this.dispatch('aggregate', this.targets, changed)
     }).on('unlink', async (p) => {
       Object.keys(this.dependents).forEach(k => {
@@ -95,18 +109,15 @@ class Jeye{
   }
 
 
-  async effects(p,changes=[]){
+  async effects(p,changes=new Set()){
     // if in source directory and isn't hidden
-    changes.push(p);
-    if(this.isTarget(p)){
-      // fire 'change' event and wait for completion
-      await this.dispatch('change', p, this.targets[p], changes)
-      // increment changes (1 target changed so far)
-    }
+    changes.add(p);
     if(this.dependents[p]){
       let effect = async function(dep){
         let nested_changes = await this.effects(dep,changes)
-        changes = changes.concat(nested_changes.filter(v => changes.indexOf(v) < 0))
+        nested_changes.forEach(v => {
+          changes.add(v)
+        })
       }.bind(this)
       let promises = []
       this.dependents[p].forEach(dep => {
@@ -114,7 +125,7 @@ class Jeye{
       })
       await Promise.all(promises)
     }
-    return changes;
+    return [...changes.values()];
   }
 
   async updateDependents(p){
@@ -148,6 +159,7 @@ class Jeye{
           }
         }
       }.bind(this))
+      await Promise.all(promises)
     }
   }
 
@@ -181,6 +193,7 @@ export function watch(source, options){
 export async function targets(sources=[], options={}){
   let targets = {}
   let paths = []
+  sources = (Array.isArray(source) ? source : [source]).map(path.normalize)
 
   sources.map(src => {
     totalist(src,  (rel) => {
