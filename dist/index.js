@@ -62,61 +62,54 @@ class Jeye{
       dependents: {},
       subscribers: {}
     });
+    this.cache = options.cache || require.cache;
+
+    this.updateDependents = this.updateDependents.bind(this);
+    this.effects = this.effects.bind(this);
+    this.changeFile = this.changeFile.bind(this);
+    this.removeFile = this.removeFile.bind(this);
+
     this.watcher = chokidar.watch(this.sources, {
       ...options.chokidar,
       ignoreInitial: true
-    }).on('add', async (p) => {
-      await this.updateDependents(p);
-      let changed = await this.effects(p);
-      let promises = changed.map(async change => {
-        if(this.isTarget(change)){
-          // fire 'change' event and wait for completion
-          await this.dispatch('change', change, this.targets[change], changed);
-        }
-      });
-      await Promise.all(promises);
-      this.dispatch('aggregate', this.targets, changed);
-    }).on('change', async (p) => {
-      await this.updateDependents(p);
-      let changed = await this.effects(p);
-      let promises = changed.map(async change => {
-        if(this.isTarget(change)){
-          // fire 'change' event and wait for completion
-          await this.dispatch('change', change, this.targets[change], changed);
-        }
-      });
-      await Promise.all(promises);
-      this.dispatch('aggregate', this.targets, changed);
-    }).on('unlink', async (p) => {
-      Object.keys(this.dependents).forEach(k => {
-        this.dependents[k].delete(p);
-        if(this.dependents[k].size === 0){
-          delete this.dependents[k];
-        }
-      });
-      delete this.dependents[p];
-      this.dispatch('remove', p);
-    }).on('unlinkDir', async (p) => {
-      Object.keys(this.dependents).forEach(k => {
-        this.dependents[k].forEach(dep => {
-          if(dep.startsWith(p)){
-            this.dependents[k].delete(dep);
-          }
-        });
-        if(this.dependents[k].size === 0){
-          delete this.dependents[k];
-        }
-      });
-      this.dispatch('remove', p);
-    });
+    })
+    .on('add', this.changeFile)
+    .on('change', this.changeFile)
+    .on('unlink', this.removeFile)
+    .on('unlinkDir', this.removeFile);
 
     this.init().then(() => {
       this.dispatch('ready', this.targets);
     }).catch(e => {
       this.dispatch('error', "Error initializing jeye");
     });
-    this.updateDependents = this.updateDependents.bind(this);
-    this.effects = this.effects.bind(this);
+  }
+
+  async changeFile(p){
+    await this.updateDependents(p);
+    let changed = await this.effects(p);
+    await Promise.all(
+      changed.map(async change => {
+        await this.dispatch('change', change, this.targets[change]);
+      })
+    );
+    this.dispatch('aggregate', this.targets, changed);
+  }
+
+  async removeFile(p){
+    let changed = [];
+    Object.keys(this.dependents).forEach(k => {
+      this.dependents[k].forEach(dep => {
+        if(dep.startsWith(p)){
+          this.dependents[k].delete(dep);
+          changed.push(dep);
+        }
+      });
+      if(this.dependents[k].size === 0 || k.startsWith(p)){
+        delete this.dependents[k];
+      }
+    });
+    this.dispatch('remove', p, changed);
   }
 
   isTarget(p){
@@ -130,23 +123,23 @@ class Jeye{
   }
 
 
-  async effects(p,changes=new Set()){
+  async effects(p,changed=new Set()){
     // if in source directory and isn't hidden
-    changes.add(p);
+    if(this.isTarget(p)){
+      changed.add(p);
+    }
+    delete this.cache[path__default.join(process.cwd(), p)];
     if(this.dependents[p]){
       let effect = async function(dep){
-        let nested_changes = await this.effects(dep,changes);
-        nested_changes.forEach(v => {
-          changes.add(v);
-        });
+        await this.effects(dep,changed);
       }.bind(this);
       let promises = [];
-      this.dependents[p].forEach(dep => {
+      this.dependents[p].forEach((dep) => {
         promises.push(effect(dep));
       });
       await Promise.all(promises);
     }
-    return [...changes.values()];
+    return [...changed.values()];
   }
 
   async updateDependents(p){
