@@ -3,13 +3,16 @@
 </div>
 
 <h1 align="center">jeye</h1>
+<h3 align="center">Watch files and their dependencies for changes</h3>
+
 <div align="center">
   <a href="https://npmjs.org/package/jeye">
     <img src="https://badgen.now.sh/npm/v/jeye" alt="version" />
   </a>
+  <a href="https://packagephobia.com/result?p=jeye">
+    <img src="https://badgen.net/packagephobia/install/jeye" alt="install size" />
+  </a>
 </div>
-
-<div align="center">Watch files and their dependencies for changes</div>
 
 ## Overview
 - Watch .js files and their dependencies for changes (combination of [`chokidar`](https://github.com/paulmillr/chokidar) and [`esm-module-lexer`](https://github.com/guybedford/es-module-lexer))
