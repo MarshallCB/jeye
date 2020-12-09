@@ -31,18 +31,23 @@ function isHidden(p, ignore, only){
   return !shouldInclude || shouldIgnore
 }
 
+// TODO: handler errors such that it waits until error is resolved before continuing
 async function file_info(p, sources){
-  await init;
-  let js = (path.extname(p) === '.js');
-  let contents = await readFile(p);
-  let id=p;
-  sources.find(s => {
-    id = p.startsWith(s) ? p.replace(s,"") : p;
-    // it found the correct source when id != p
-    return id !== p;
-  });
-  let [imports, exports] = js ? parse(contents.toString('utf8')) : [null,null];
-  return { imports, exports, contents, js, id }
+  try{
+    await init;
+    let js = (path.extname(p) === '.js');
+    let contents = await readFile(p);
+    let id=p;
+    sources.find(s => {
+      id = p.startsWith(s) ? p.replace(s,"") : p;
+      // it found the correct source when id != p
+      return id !== p;
+    });
+    let [imports, exports] = js ? parse(contents.toString('utf8')) : [null,null];
+    return { imports, exports, contents, js, id }
+  } catch(e){
+    console.log("Error parsing " + p);
+  }
 }
 
 class Jeye{
@@ -55,10 +60,10 @@ class Jeye{
       subscribers: {}
     });
     this.cache = options.cache || require.cache;
-
     this.updateDependents = this.updateDependents.bind(this);
     this.effects = this.effects.bind(this);
     this.changeFile = this.changeFile.bind(this);
+    this.init = this.init.bind(this);
     this.removeFile = this.removeFile.bind(this);
 
     this.watcher = chokidar.watch(this.sources, {
@@ -74,6 +79,7 @@ class Jeye{
       this.dispatch('ready', this.targets);
     }).catch(e => {
       this.dispatch('error', "Error initializing jeye");
+      console.log(e);
     });
   }
 
@@ -135,6 +141,7 @@ class Jeye{
   }
 
   async updateDependents(p){
+    delete this.cache[path.join(process.cwd(), p)];
     let info = await file_info(p, this.sources);
     if(this.isTarget(p)){
       this.targets[p] = info;
