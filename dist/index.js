@@ -162,7 +162,7 @@ class Jeye{
         // only look for local imports (like './file.js' or '../file.js', not 'external-module')
         if(import_str.startsWith('.')){
           // ensure .js extension if not included in import statement
-          import_str = import_str.endsWith('.js') ? import_str : import_str + '.js';
+          import_str = import_str.endsWith('.js') || import_str.endsWith('.json') ? import_str : import_str + '.js';
           // convert the import path to be relative to the cwd
           let import_path = path__default.join(p, '../', import_str);
           
